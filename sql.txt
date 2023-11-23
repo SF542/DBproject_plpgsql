@@ -1,0 +1,81 @@
+CREATE TABLE public."Orders" (
+    order_id SERIAL PRIMARY KEY,
+    customer_id INT,
+    order_date DATE,
+    total_amount INT,
+    total_positions INT
+);
+
+CREATE TABLE public."Customers" (
+    customer_id SERIAL PRIMARY KEY,
+    first_name TEXT,
+    last_name TEXT,
+    email TEXT,
+    phone TEXT,
+	password TEXT
+);
+
+CREATE TABLE public."Products" (
+    product_id SERIAL PRIMARY KEY,
+    product_name TEXT,
+    price INT
+);
+
+CREATE TABLE public."OrdersDetails" (
+    customer_id INT,
+    order_id INT,
+    product_name TEXT,
+    price INT,
+    FOREIGN KEY (customer_id) REFERENCES "Customers"(customer_id),
+    FOREIGN KEY (order_id) REFERENCES "Orders"(order_id)
+);
+
+
+
+INSERT INTO public."Products"(product_name, price) VALUES ('Вода 0,5 Л', 40);
+INSERT INTO public."Products"(product_name, price) VALUES ('Вода 1 Л', 70);
+INSERT INTO public."Products"(product_name, price) VALUES ('Хлеб черный', 45);
+INSERT INTO public."Products"(product_name, price) VALUES ('Хлеб белый', 45);
+
+INSERT INTO public."Customers"(first_name, last_name, email, phone, password) VALUES ('admin', 'adnim', 'admin', +78932132143, 'admin');
+
+CREATE TABLE ARCHIVE (
+    user_id TEXT,
+    change_timestamp TIMESTAMP,
+    action VARCHAR(10),
+    affected_rows INT
+);
+
+CREATE OR REPLACE FUNCTION archive_products_changes()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF TG_OP = 'INSERT' THEN
+        INSERT INTO ARCHIVE (user_id, change_timestamp, action, affected_rows)
+        VALUES (current_user, NOW(), 'Insert', 1);
+    ELSIF TG_OP = 'UPDATE' THEN
+        INSERT INTO ARCHIVE (user_id, change_timestamp, action, affected_rows)
+        VALUES (current_user, NOW(), 'Update', 1);
+    ELSIF TG_OP = 'DELETE' THEN
+        INSERT INTO ARCHIVE (user_id, change_timestamp, action, affected_rows)
+        VALUES (current_user, NOW(), 'Delete', 1);
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER products_changes_trigger
+AFTER INSERT OR UPDATE OR DELETE ON "Products"
+FOR EACH ROW EXECUTE FUNCTION archive_products_changes();
+
+CREATE OR REPLACE FUNCTION get_total_amount_by_customer_id(input_customer_id INT)
+RETURNS INT AS $$
+DECLARE
+    total_amount_sum INT := 0;
+BEGIN
+    SELECT COALESCE(SUM(total_amount), 0)
+    INTO total_amount_sum
+    FROM "Orders"
+    WHERE customer_id = input_customer_id;
+    RETURN total_amount_sum;
+END;
+$$ LANGUAGE plpgsql;
